@@ -1,0 +1,77 @@
+Scenario = uavScenario("UpdateRate",100,"ReferenceLocation",[0 0 0]);
+InitialPosition = [0 0 -7];
+InitialOrientation = [0 0 0];
+GoalPosition =[0 25 -7];
+platUAV = uavPlatform("UAV",Scenario, ...
+                      "ReferenceFrame","NED", ...
+                      "InitialPosition",InitialPosition, ...
+                      "InitialOrientation",eul2quat(InitialOrientation));
+updateMesh(platUAV,"quadrotor",{4},[0 0 1],eul2tform([0 0 pi]));
+AzimuthResolution = 0.5;      
+ElevationResolution = 2;
+MaxRange = 7;
+AzimuthLimits = [-179 179];
+ElevationLimits = [-25 25];
+LidarModel = uavLidarPointCloudGenerator("UpdateRate",10, ...
+                                         "MaxRange",MaxRange, ...
+                                         "RangeAccuracy",3, ...
+                                         "AzimuthResolution",AzimuthResolution, ...
+                                         "ElevationResolution",ElevationResolution, ...
+                                         "AzimuthLimits",AzimuthLimits, ...
+                                         "ElevationLimits",ElevationLimits, ...                                       
+                                         "HasOrganizedOutput",true);
+uavSensor("Lidar",platUAV,LidarModel, ...
+          "MountingLocation",[0 0 -0.4], ...
+          "MountingAngles",[0 0 180]);
+
+ObstaclePositions = [10 0; 20 10; 10 20; 30 10; 15 25; 5 5; 5 15; 30 27; 27 20]; % Locations of the obstacles
+ObstacleHeight = 7; %Height of obstacles                    
+ObstaclesWidth = 3; %Width of obstacles                   
+
+for i = 1:size(ObstaclePositions,1)
+    addMesh(Scenario,"polygon", ...
+        {[ObstaclePositions(i,1)-ObstaclesWidth/2 ObstaclePositions(i,2)-ObstaclesWidth/2; ...
+        ObstaclePositions(i,1)+ObstaclesWidth/2 ObstaclePositions(i,2)-ObstaclesWidth/2; ...
+        ObstaclePositions(i,1)+ObstaclesWidth/2 ObstaclePositions(i,2)+ObstaclesWidth/2; ...
+        ObstaclePositions(i,1)-ObstaclesWidth/2 ObstaclePositions(i,2)+ObstaclesWidth/2], ...
+        [0 ObstacleHeight]},[0.039 0.549 0.157]);
+end
+open_system("ObstacleAvoidanceDemo.slx");
+Waypoints = [InitialPosition; 0 5 -7; 5 5 -7; 5 10 -7; 15 5 -7; 20 5 -7; 25 5 -7; 30 15 -7; 25 20 -7; 20 25 -7;
+    15 25 -7; 10 25 -7; 5 25 -7; GoalPosition]; %waypoints in the map for navigation 
+for i = 2:size(Waypoints,1) %setting different colors for the 
+    if i == 2  % Initial Position
+        color = [0 0 1];  % Blue (initial waypoint)
+    elseif i == size(Waypoints,1)  % Goal Position
+        color = [0 1 0];  % Green (goal waypoint)
+    else
+        color = [1 0 0];  % Red (other waypoints)
+    end
+    addMesh(Scenario, "cylinder", {[Waypoints(i,2) Waypoints(i,1) 1], [0 0.1]}, color);
+end
+
+hold on
+plot3([InitialPosition(1,2); Waypoints(:,2)],[InitialPosition(1,2); Waypoints(:,1)],[-InitialPosition(1,3); -Waypoints(:,3)],"-g")
+legend(["Start Position","Obstacles","","","Waypoints","","","Direct Path"])
+%Using PID controller, initializing the initial values of constants
+Px = 6;
+Py = 6;
+Pz = 6.5;
+Dx = 1.5;
+Dy = 1.5;
+Dz = 2.5;
+Ix = 0;
+Iy = 0;
+Iz = 0;
+Nx = 10;
+Ny = 10;
+Nz = 14.4947065605712; 
+UAVSampleTime = 0.001;
+Gravity = 9.81;
+DroneMass = 0.1;
+out = sim("ObstacleAvoidanceDemo.slx");
+hold on
+points = squeeze(out.trajectoryPoints(1,:,:))';
+plot3(points(:,2),points(:,1),-points(:,3),"-r");
+legend(["Start Position","Obstacles","","","Waypoints","","","Direct Path","UAV Trajectory"])
+show3D(Scenario);
